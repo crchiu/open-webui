@@ -80,6 +80,72 @@ async def request_pyannote(wav_path: Path):
                 return await response.json()
 
 
+
+async def transcribe_with_word_timestamps(
+    request: Request,
+    wav_path: Path,
+    language: str | None = None,
+):
+    from open_webui.config import (
+        WHISPER_LANGUAGE,
+        WHISPER_MULTILINGUAL,
+        WHISPER_VAD_FILTER,
+    )
+    from open_webui.routers.audio import set_faster_whisper_model
+
+    # Reuse the same model instance as Open WebUI STT.
+    if request.app.state.faster_whisper_model is None:
+        model_name = await Config.get("audio.stt.whisper_model")
+
+        request.app.state.faster_whisper_model = (
+            await asyncio.to_thread(
+                set_faster_whisper_model,
+                model_name,
+            )
+        )
+
+    model = request.app.state.faster_whisper_model
+
+    if model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Local Faster-Whisper model is not configured",
+        )
+
+    selected_language = WHISPER_LANGUAGE or language
+
+    def run_whisper():
+        segments, info = model.transcribe(
+            str(wav_path),
+            beam_size=5,
+            vad_filter=WHISPER_VAD_FILTER,
+            language=selected_language,
+            multilingual=WHISPER_MULTILINGUAL,
+            word_timestamps=True,
+        )
+
+        words = []
+        full_text = []
+
+        for segment in segments:
+            full_text.append(segment.text)
+
+            for word in segment.words or []:
+                words.append({
+                    "start": float(word.start),
+                    "end": float(word.end),
+                    "text": word.word,
+                })
+
+        return {
+            "text": "".join(full_text).strip(),
+            "language": info.language,
+            "words": words,
+        }
+
+    return await asyncio.to_thread(run_whisper)
+
+
 @router.post("/diarize")
 async def diarize_audio(
     request: Request,
@@ -143,14 +209,44 @@ async def diarize_audio(
                     400, "Audio conversion failed"
                 )
 
+
+            # result = await request_pyannote(wav_path)
+
+            # return {
+            #    "filename": filename,
+            #    "language": language,
+            #    "speakers": result.get("speakers", []),
+            #    "num_speakers": result.get("num_speakers", 0),
+            #    "segments": result.get("segments", []),
+            #}
+
+
+            # 1. Speaker diarization
             result = await request_pyannote(wav_path)
+
+            # 2. Word-level Whisper transcription
+            whisper_result = await transcribe_with_word_timestamps(
+                request,
+                wav_path,
+                language,
+            )
+
+            # 3. Align words with speaker turns
+            from open_webui.routers.audio.alignment import align_words
+
+            aligned = align_words(
+                whisper_result["words"],
+                result.get("segments", []),
+            )
 
             return {
                 "filename": filename,
-                "language": language,
+                "language": whisper_result["language"],
+                "text": whisper_result["text"],
                 "speakers": result.get("speakers", []),
                 "num_speakers": result.get("num_speakers", 0),
                 "segments": result.get("segments", []),
+                "diarization": aligned,
             }
 
         finally:
