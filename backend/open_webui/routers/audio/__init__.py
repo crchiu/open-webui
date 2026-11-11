@@ -72,6 +72,10 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 router.include_router(realtime.router)
 
+# for speaker diarization 2026/11/11
+from open_webui.routers.audio import diarization
+router.include_router(diarization.router)
+
 # Constants
 
 MAX_FILE_SIZE_MB: int = 20
