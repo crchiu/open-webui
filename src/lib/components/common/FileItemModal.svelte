@@ -528,13 +528,79 @@
 						{/if}
 					{/if}
 				{:else if selectedTab === 'preview'}
+
+
 					{#if isAudio}
+						<!-- 音訊播放器 -->
 						<audio
 							src={`${WEBUI_API_BASE_URL}/files/${item.id}/content`}
-							class="w-full border-0 rounded-lg mb-2"
+							class="w-full border-0 rounded-lg mb-4"
 							controls
 							playsinline
 						/>
+
+						<!-- 語者分離完成：顯示語者逐字稿 -->
+						{#if item?.file?.data?.diarization?.diarization?.length > 0}
+							<div class="space-y-4">
+								<div class="flex items-center justify-between">
+									<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+										STT 與語者分離結果
+									</div>
+									<div class="text-xs text-green-600">
+										解析完成
+									</div>
+								</div>
+
+								<div class="text-xs text-gray-500">
+									辨識語言：
+									{item.file.data.diarization.language ?? '未知'}
+									｜
+									預測語者數：
+									{item.file.data.diarization.num_speakers}
+								</div>
+
+								<div class="max-h-96 overflow-y-auto space-y-3">
+									{#each item.file.data.diarization.diarization as segment}
+										<div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+											<div class="mb-2 flex items-center gap-3">
+												<span class="text-xs font-semibold text-blue-600 dark:text-blue-400">
+													{segment.speaker}
+												</span>
+
+												<span class="text-xs text-gray-500">
+								{Math.floor(segment.start / 60).toString().padStart(2, '0')}:{Math.floor(segment.start % 60).toString().padStart(2, '0')}
+													–
+													{Math.floor(segment.end / 60).toString().padStart(2, '0')}:{Math.floor(segment.end % 60).toString().padStart(2, '0')}
+												</span>
+											</div>
+
+											<div class="text-sm leading-7 whitespace-pre-wrap text-gray-800 dark:text-gray-200">
+												{segment.text}
+											</div>
+										</div>
+									{/each}
+								</div>
+							</div>
+
+						<!-- 只執行 STT，或沒有可顯示的語者區段 -->
+						{:else if item?.file?.data?.content}
+							<div class="space-y-3">
+								<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+									STT 逐字稿
+								</div>
+
+								{#if item?.file?.data?.diarization_status === 'failed'}
+									<div class="text-xs text-amber-600">
+										語者分離未成功，已保留原有語音轉文字結果。
+									</div>
+								{/if}
+
+								<div class="max-h-96 overflow-y-auto whitespace-pre-wrap text-sm leading-7 text-gray-800 dark:text-gray-200">
+									{item.file.data.content}
+								</div>
+							</div>
+						{/if}
+
 					{:else if isPDF}
 						<PDFViewer
 							url={`${WEBUI_API_BASE_URL}/files/${item.id}/content`}

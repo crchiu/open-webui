@@ -251,3 +251,69 @@ async def diarize_audio(
 
         finally:
             await file.close()
+
+
+async def analyze_saved_audio(
+    request: Request,
+    audio_path: str | Path,
+    filename: str,
+    language: str | None = None,
+):
+    """
+    Analyze an existing uploaded audio file using
+    Faster-Whisper + Pyannote speaker diarization.
+    """
+    from open_webui.routers.audio.alignment import align_words
+
+    source = Path(audio_path)
+
+    if not source.is_file():
+        raise FileNotFoundError(
+            f"Audio file not found: {source}"
+        )
+
+    if source.stat().st_size > MAX_AUDIO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Audio file too large for diarization",
+        )
+
+    with tempfile.TemporaryDirectory(
+        prefix="openwebui_diarize_file_"
+    ) as tmp:
+        wav_path = Path(tmp) / "audio_16k.wav"
+
+        # 1. Convert audio into 16kHz mono WAV.
+        await asyncio.to_thread(
+            normalize_audio,
+            source,
+            wav_path,
+        )
+
+        # 2. Run Pyannote speaker diarization.
+        speaker_result = await request_pyannote(wav_path)
+
+        # 3. Run Faster-Whisper with word timestamps.
+        whisper_result = await transcribe_with_word_timestamps(
+            request,
+            wav_path,
+            language,
+        )
+
+        # 4. Align recognized words with speaker segments.
+        aligned = align_words(
+            whisper_result["words"],
+            speaker_result.get("segments", []),
+        )
+
+        return {
+            "filename": filename,
+            "language": whisper_result["language"],
+            "text": whisper_result["text"],
+            "speakers": speaker_result.get("speakers", []),
+            "num_speakers": speaker_result.get(
+                "num_speakers", 0
+            ),
+            "segments": speaker_result.get("segments", []),
+            "diarization": aligned,
+        }

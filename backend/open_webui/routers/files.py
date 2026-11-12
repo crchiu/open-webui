@@ -41,6 +41,9 @@ from open_webui.models.knowledge import Knowledges
 from open_webui.models.users import Users
 from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from open_webui.routers.audio import transcribe
+
+from open_webui.routers.audio.diarization import analyze_saved_audio
+
 from open_webui.routers.knowledge import check_knowledge_upload_limits
 from open_webui.routers.retrieval import ProcessFileForm, index_file, process_file
 from open_webui.storage.provider import Storage
@@ -124,6 +127,47 @@ def _media_supported_for_extraction(
     return bool(content_extraction_engine and _matches_configured_mime_type(supported, content_type))
 
 
+def format_diarization_for_llm(result: dict) -> str:
+    """Convert diarization output into LLM-readable Markdown."""
+
+    lines = [
+        "# 音訊逐字稿",
+        f"檔案名稱：{result.get('filename', '')}",
+        f"辨識語言：{result.get('language', 'unknown')}",
+        f"語者數量：{result.get('num_speakers', 0)}",
+        "",
+        "## 依語者及時間排序的逐字稿",
+        "",
+    ]
+
+    segments = result.get("diarization") or []
+
+    for segment in sorted(
+        segments,
+        key=lambda item: float(item.get("start", 0)),
+    ):
+        start = float(segment.get("start", 0))
+        end = float(segment.get("end", 0))
+        speaker = segment.get("speaker") or "UNKNOWN"
+        text = str(segment.get("text", "")).strip()
+
+        if not text:
+            continue
+
+        def timestamp(seconds: float) -> str:
+            minutes, remainder = divmod(int(seconds), 60)
+            hours, minutes = divmod(minutes, 60)
+            return f"{hours:02d}:{minutes:02d}:{remainder:02d}"
+
+        lines.append(
+            f"**[{timestamp(start)}–{timestamp(end)}] "
+            f"{speaker}**：{text}"
+        )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 async def process_uploaded_file(
     request,
     file,
@@ -157,21 +201,106 @@ async def process_uploaded_file(
                 'rag.content_extraction.supported_media_mime_types'
             )
 
+            #if content_type and strict_match_mime_type(stt_supported, content_type):
+            #    # Audio / STT-supported files → transcribe then index
+            #    file_path_processed = await asyncio.to_thread(Storage.get_file, file_path)
+            #    result = await transcribe(
+            #        request,
+            #        file_path_processed,
+            #        file_metadata,
+            #        user,
+            #    )
+            #    await index_file(
+            #        request,
+            #        ProcessFileForm(file_id=file_item.id, content=result.get('text', '')),
+            #        user=user,
+            #        db=db_session,
+            #    )
+
             if content_type and strict_match_mime_type(stt_supported, content_type):
-                # Audio / STT-supported files → transcribe then index
-                file_path_processed = await asyncio.to_thread(Storage.get_file, file_path)
-                result = await transcribe(
-                    request,
-                    file_path_processed,
-                    file_metadata,
-                    user,
+                file_path_processed = await asyncio.to_thread(
+                    Storage.get_file, file_path
                 )
+
+                enable_diarization = await Config.get(
+                    "audio.stt.enable_diarization", False
+                )
+                stt_engine = await Config.get("audio.stt.engine", "")
+
+                diarization_result = None
+
+                if enable_diarization and stt_engine == "":
+                    try:
+                        diarization_result = await analyze_saved_audio(
+                            request=request,
+                            audio_path=file_path_processed,
+                            filename=file_item.filename,
+                            language=file_metadata.get("language"),
+                        )
+                        # transcript = diarization_result["text"]
+                        transcript = format_diarization_for_llm(diarization_result)
+
+                    except Exception as exc:
+                        log.exception(
+                            "Diarization failed for file %s",
+                            file_item.id,
+                        )
+
+                        # Pyannote 失敗時，退回原有 STT 流程
+                        result = await transcribe(
+                            request,
+                            file_path_processed,
+                            file_metadata,
+                            user,
+                        )
+                        transcript = result.get("text", "")
+
+                        await Files.update_file_data_by_id(
+                            file_item.id,
+                            {
+                                "diarization_status": "failed",
+                                "diarization_error": str(exc),
+                            },
+                            db=db_session,
+                        )
+                else:
+                    # 關閉語者分離時，維持原有 STT
+                    result = await transcribe(
+                        request,
+                        file_path_processed,
+                        file_metadata,
+                        user,
+                    )
+                    transcript = result.get("text", "")
+
+                # 保留原本的逐字稿索引功能
                 await index_file(
                     request,
-                    ProcessFileForm(file_id=file_item.id, content=result.get('text', '')),
+                    ProcessFileForm(
+                        file_id=file_item.id,
+                        content=transcript,
+                    ),
                     user=user,
                     db=db_session,
                 )
+
+                # 儲存語者分離結果，供附件預覽使用
+                if diarization_result is not None:
+                    updated = await Files.update_file_data_by_id(
+                        file_item.id,
+                        {
+                            "diarization_status": "completed",
+                            "diarization": diarization_result,
+                        },
+                        db=db_session,
+                    )
+
+                    if updated is None:
+                        log.error(
+                            "Failed to save diarization for file %s",
+                            file_item.id,
+                        )
+
 
             elif (
                 content_type

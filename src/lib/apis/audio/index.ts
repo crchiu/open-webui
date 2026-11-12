@@ -109,6 +109,64 @@ export const transcribeAudio = async (token: string, file: File, language?: stri
 	return res;
 };
 
+
+export type DiarizationSegment = {
+	speaker: string;
+	start: number;
+	end: number;
+	text: string;
+};
+
+export type DiarizationResponse = {
+	filename: string;
+	language: string | null;
+	text: string;
+	speakers: string[];
+	num_speakers: number;
+	segments: {
+		start: number;
+		end: number;
+		speaker: string;
+	}[];
+	diarization: DiarizationSegment[];
+};
+
+export const diarizeAudio = async (
+	token: string,
+	file: File,
+	language?: string
+): Promise<DiarizationResponse> => {
+	const data = new FormData();
+
+	data.append('file', file);
+
+	if (language) {
+		data.append('language', language);
+	}
+
+	const response = await fetch(
+		`${AUDIO_API_BASE_URL}/diarize`,
+		{
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: data
+		}
+	);
+
+	if (!response.ok) {
+		const error = await response.json().catch(() => null);
+		throw new Error(
+			error?.detail ?? `Diarization failed (${response.status})`
+		);
+	}
+
+	return await response.json();
+};
+
+
 export const synthesizeOpenAISpeech = async (
 	token: string = '',
 	speaker: string = 'alloy',

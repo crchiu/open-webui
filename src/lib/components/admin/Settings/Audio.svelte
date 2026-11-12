@@ -85,6 +85,7 @@
 	let STT_MISTRAL_USE_CHAT_COMPLETIONS = false;
 
 	let STT_WHISPER_MODEL_LOADING = false;
+        let STT_ENABLE_DIARIZATION = false;
 
 	type Voice = {
 		id: string;
@@ -213,7 +214,8 @@
 				AZURE_MAX_SPEAKERS: STT_AZURE_MAX_SPEAKERS,
 				MISTRAL_API_KEY: STT_MISTRAL_API_KEY,
 				MISTRAL_API_BASE_URL: STT_MISTRAL_API_BASE_URL,
-				MISTRAL_USE_CHAT_COMPLETIONS: STT_MISTRAL_USE_CHAT_COMPLETIONS
+				MISTRAL_USE_CHAT_COMPLETIONS: STT_MISTRAL_USE_CHAT_COMPLETIONS,
+                                ENABLE_DIARIZATION: STT_ENABLE_DIARIZATION
 			}
 		});
 
@@ -269,6 +271,9 @@
 			STT_MODEL = res.stt.MODEL;
 			STT_SUPPORTED_CONTENT_TYPES = (res?.stt?.SUPPORTED_CONTENT_TYPES ?? []).join(',');
 			STT_WHISPER_MODEL = res.stt.WHISPER_MODEL;
+
+			STT_ENABLE_DIARIZATION = res.stt.ENABLE_DIARIZATION ?? false;
+
 			STT_AZURE_API_KEY = res.stt.AZURE_API_KEY;
 			STT_AZURE_REGION = res.stt.AZURE_REGION;
 			STT_AZURE_LOCALES = res.stt.AZURE_LOCALES;
@@ -278,6 +283,7 @@
 			STT_MISTRAL_API_KEY = res.stt.MISTRAL_API_KEY;
 			STT_MISTRAL_API_BASE_URL = res.stt.MISTRAL_API_BASE_URL;
 			STT_MISTRAL_USE_CHAT_COMPLETIONS = res.stt.MISTRAL_USE_CHAT_COMPLETIONS;
+
 		}
 
 		await getVoices();
@@ -688,6 +694,18 @@
 						</a>
 					</div>
 				</AdminSettingField>
+
+				<!-- 新增：語者分離啟用開關 -->
+				<AdminSettingRow
+					label="Enable Diarization"
+					description="啟用 Pyannote 語者分離，於音訊轉錄後提供語者標籤與時間戳記。"
+					let:labelId
+				>
+					<Switch
+						bind:state={STT_ENABLE_DIARIZATION}
+						ariaLabelledbyId={labelId}
+					/>
+				</AdminSettingRow>
 			{/if}
 		</AdminSettingSection>
 

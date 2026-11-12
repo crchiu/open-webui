@@ -134,6 +134,7 @@ STT_CONFIG_KEYS = {
     'MISTRAL_API_KEY': 'audio.stt.mistral.api_key',
     'MISTRAL_API_BASE_URL': 'audio.stt.mistral.api_base_url',
     'MISTRAL_USE_CHAT_COMPLETIONS': 'audio.stt.mistral.use_chat_completions',
+    "ENABLE_DIARIZATION": "audio.stt.enable_diarization",
 }
 
 
@@ -296,6 +297,7 @@ class STTConfigForm(BaseModel):
     MISTRAL_API_KEY: str
     MISTRAL_API_BASE_URL: str
     MISTRAL_USE_CHAT_COMPLETIONS: bool
+    ENABLE_DIARIZATION: bool = False
 
 
 class RealtimeConfigForm(BaseModel):
