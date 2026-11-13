@@ -32,7 +32,9 @@ PYANNOTE_API_URL = os.getenv(
     "http://host.docker.internal:8001"
 )
 
-MAX_AUDIO_BYTES = 20 * 1024 * 1024
+MAX_AUDIO_BYTES = int(
+    os.getenv("MAX_DIARIZATION_AUDIO_MB", "200")
+) * 1024 * 1024
 
 
 def normalize_audio(src: Path, dst: Path):

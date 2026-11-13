@@ -16,7 +16,10 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from pyannote.audio import Pipeline
 
 MODEL_ID = "pyannote/speaker-diarization-3.1"
-MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+MAX_UPLOAD_BYTES = int(
+    os.getenv("MAX_DIARIZATION_UPLOAD_MB", "500")
+) * 1024 * 1024
+
 
 app = FastAPI(
     title="Pyannote Diarization API",
