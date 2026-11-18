@@ -46,6 +46,11 @@
 	export let title: string | undefined = undefined;
 
 	export let onSave = (e) => {};
+	export let onCancel = () => {};
+	const cancelHandler = () => {
+		onCancel();
+		show = false;
+	};
 
 	let loading = true;
 	let variableValues = {};
@@ -106,7 +111,7 @@
 	}
 </script>
 
-<Modal ariaLabel={title ?? $i18n.t('Input Variables')} bind:show size="md">
+<Modal ariaLabel={title ?? $i18n.t('Input Variables')} bind:show size="md" onRequestClose={cancelHandler} >
 	<div>
 		<div class=" flex justify-between dark:text-gray-300 px-4 pt-3 pb-1">
 			<div class=" text-sm font-medium self-center">
@@ -115,9 +120,7 @@
 			<button
 				aria-label={$i18n.t('Close')}
 				class="self-center rounded-lg py-1 text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-0"
-				on:click={() => {
-					show = false;
-				}}
+				on:click={cancelHandler}
 			>
 				<XMark className={'size-4'} />
 			</button>
@@ -404,9 +407,7 @@
 						<button
 							class="flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-normal transition disabled:opacity-60 bg-white hover:bg-gray-100 text-black dark:bg-black dark:text-white dark:hover:bg-gray-900"
 							type="button"
-							on:click={() => {
-								show = false;
-							}}
+							on:click={cancelHandler}
 						>
 							{$i18n.t('Cancel')}
 						</button>

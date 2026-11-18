@@ -353,6 +353,15 @@
 
 	$: onChange(chatInputDraft);
 
+	const getDefaultInputVariableValues = () => {
+		const defaults: Record<string, any> = {};
+		for (const [key, definition] of Object.entries(inputVariables)) {
+			defaults[key] = (definition as any)?.default ?? '';
+		}
+
+		return defaults;
+	};
+
 	const inputVariableHandler = async (text: string): Promise<string> => {
 		inputVariables = extractInputVariables(text);
 
@@ -371,6 +380,12 @@
 				resolve(text);
 			};
 		});
+	};
+
+	const cancelInputVariablesHandler = () => {
+		const defaultValues = getDefaultInputVariableValues();
+
+		inputVariablesModalCallback(defaultValues);
 	};
 
 	const textVariableHandler = async (text: string) => {
@@ -1948,6 +1963,7 @@
 	bind:show={showInputVariablesModal}
 	variables={inputVariables}
 	onSave={inputVariablesModalCallback}
+	onCancel={cancelInputVariablesHandler}
 />
 
 <ValvesModal

@@ -127,45 +127,108 @@ def _media_supported_for_extraction(
     return bool(content_extraction_engine and _matches_configured_mime_type(supported, content_type))
 
 
+
 def format_diarization_for_llm(result: dict) -> str:
-    """Convert diarization output into LLM-readable Markdown."""
+    """依首次發言順序重新編號語者，產生 LLM 可讀取的逐字稿。"""
+
+    segments = sorted(
+        result.get("diarization") or [],
+        key=lambda item: float(item.get("start", 0)),
+    )
+
+    # 原始 Pyannote ID → 顯示名稱
+    speaker_map = {}
+
+    for segment in segments:
+        speaker_id = segment.get("speaker") or "UNKNOWN"
+
+        if speaker_id not in speaker_map:
+            speaker_map[speaker_id] = (
+                f"語者 {len(speaker_map) + 1}"
+                if speaker_id != "UNKNOWN"
+                else "未知語者"
+            )
+
+    def timestamp(seconds: float) -> str:
+        minutes, remainder = divmod(int(seconds), 60)
+        hours, minutes = divmod(minutes, 60)
+        return f"{hours:02d}:{minutes:02d}:{remainder:02d}"
 
     lines = [
         "# 音訊逐字稿",
+        "",
         f"檔案名稱：{result.get('filename', '')}",
         f"辨識語言：{result.get('language', 'unknown')}",
         f"語者數量：{result.get('num_speakers', 0)}",
         "",
-        "## 依語者及時間排序的逐字稿",
+        "## 依時間排序的逐字稿",
         "",
     ]
 
-    segments = result.get("diarization") or []
-
-    for segment in sorted(
-        segments,
-        key=lambda item: float(item.get("start", 0)),
-    ):
-        start = float(segment.get("start", 0))
-        end = float(segment.get("end", 0))
-        speaker = segment.get("speaker") or "UNKNOWN"
+    for segment in segments:
         text = str(segment.get("text", "")).strip()
 
         if not text:
             continue
 
-        def timestamp(seconds: float) -> str:
-            minutes, remainder = divmod(int(seconds), 60)
-            hours, minutes = divmod(minutes, 60)
-            return f"{hours:02d}:{minutes:02d}:{remainder:02d}"
+        start = float(segment.get("start", 0))
+        end = float(segment.get("end", 0))
+        speaker_id = segment.get("speaker") or "UNKNOWN"
+        speaker_name = speaker_map[speaker_id]
 
         lines.append(
             f"**[{timestamp(start)}–{timestamp(end)}] "
-            f"{speaker}**：{text}"
+            f"{speaker_name}**：{text}"
         )
         lines.append("")
 
+    # 若未取得可對齊區段，保留 Whisper 原始辨識結果
+    if not any(str(s.get("text", "")).strip() for s in segments):
+        lines.append("## 原始辨識文字")
+        lines.append(str(result.get("text", "")))
+
     return "\n".join(lines)
+
+
+#def format_diarization_for_llm(result: dict) -> str:
+#    """Convert diarization output into LLM-readable Markdown."""
+#
+#    lines = [
+#        "# 音訊逐字稿",
+#        f"檔案名稱：{result.get('filename', '')}",
+#        f"辨識語言：{result.get('language', 'unknown')}",
+#        f"語者數量：{result.get('num_speakers', 0)}",
+#        "",
+#        "## 依語者及時間排序的逐字稿",
+#        "",
+#    ]
+#
+#    segments = result.get("diarization") or []
+#
+#    for segment in sorted(
+#        segments,
+#        key=lambda item: float(item.get("start", 0)),
+#    ):
+#        start = float(segment.get("start", 0))
+#        end = float(segment.get("end", 0))
+#        speaker = segment.get("speaker") or "UNKNOWN"
+#        text = str(segment.get("text", "")).strip()
+#
+#        if not text:
+#            continue
+#
+#        def timestamp(seconds: float) -> str:
+#            minutes, remainder = divmod(int(seconds), 60)
+#            hours, minutes = divmod(minutes, 60)
+#            return f"{hours:02d}:{minutes:02d}:{remainder:02d}"
+#
+#        lines.append(
+#            f"**[{timestamp(start)}–{timestamp(end)}] "
+#            f"{speaker}**：{text}"
+#        )
+#        lines.append("")
+#
+#    return "\n".join(lines)
 
 
 async def process_uploaded_file(

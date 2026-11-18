@@ -987,12 +987,13 @@
 
 		if (type === 'prompt') {
 			// Handle prompt selection
-			messageInput?.setTextHandler(data, async () => {
-				if (!($settings?.insertSuggestionPrompt ?? false)) {
-					await tick();
-					submitHandler(prompt);
-				}
-			});
+			// messageInput?.setTextHandler(data, async () => {
+			// 	if (!($settings?.insertSuggestionPrompt ?? false)) {
+			// 		await tick();
+			//		submitHandler(prompt);
+			//	}
+			//});
+			await messageInput?.setTextHandler(data);
 		}
 	};
 

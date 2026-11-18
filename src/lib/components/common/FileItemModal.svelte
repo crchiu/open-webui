@@ -50,6 +50,57 @@
 	let isPptx = false;
 
 	let selectedTab = '';
+
+	// v1.1 Speaker display settings
+	type SpeakerSegment = {
+		speaker: string;
+		start: number;
+		end: number;
+		text: string;
+	};
+
+	const speakerColors = [
+		'border-blue-500 bg-blue-500/10 text-blue-500',
+		'border-emerald-500 bg-emerald-500/10 text-emerald-500',
+		'border-violet-500 bg-violet-500/10 text-violet-500',
+		'border-amber-500 bg-amber-500/10 text-amber-500',
+		'border-pink-500 bg-pink-500/10 text-pink-500',
+		'border-cyan-500 bg-cyan-500/10 text-cyan-500',
+		'border-orange-500 bg-orange-500/10 text-orange-500',
+		'border-indigo-500 bg-indigo-500/10 text-indigo-500'
+	];
+
+	$: diarizationSegments = (
+		(item?.file?.data?.diarization?.diarization ?? []) as SpeakerSegment[]
+	)
+		.slice()
+		.sort((a, b) => Number(a.start) - Number(b.start));
+
+	// Number speakers in order of first appearance.
+	$: speakerIds = Array.from(
+		new Set(
+			diarizationSegments
+				.map((segment) => segment.speaker)
+				.filter((speaker) => typeof speaker === 'string' && speaker.length > 0)
+		)
+	);
+
+	const getSpeakerIndex = (speaker: string): number => {
+		return speakerIds.indexOf(speaker);
+	};
+
+	const getSpeakerName = (speaker: string): string => {
+		const index = getSpeakerIndex(speaker);
+		return index >= 0 ? `語者 ${index + 1}` : '未知語者';
+	};
+
+	const getSpeakerColor = (speaker: string): string => {
+		const index = getSpeakerIndex(speaker);
+		return speakerColors[
+			(index >= 0 ? index : 0) % speakerColors.length
+		];
+	};
+
 	let excelWorkbook: WorkBook | null = null;
 	let excelSheetNames: string[] = [];
 	let selectedSheet = '';
@@ -540,7 +591,7 @@
 						/>
 
 						<!-- 語者分離完成：顯示語者逐字稿 -->
-						{#if item?.file?.data?.diarization?.diarization?.length > 0}
+						{#if diarizationSegments.length > 0}
 							<div class="space-y-4">
 								<div class="flex items-center justify-between">
 									<div class="text-sm font-semibold text-gray-900 dark:text-gray-100">
@@ -560,11 +611,11 @@
 								</div>
 
 								<div class="max-h-96 overflow-y-auto space-y-3">
-									{#each item.file.data.diarization.diarization as segment}
-										<div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+									{#each diarizationSegments as segment, index (index)}
+										<div class={`rounded-lg border-l-4 p-3 ${getSpeakerColor(segment.speaker)}`} >
 											<div class="mb-2 flex items-center gap-3">
-												<span class="text-xs font-semibold text-blue-600 dark:text-blue-400">
-													{segment.speaker}
+												<span class="text-xs font-semibold">
+													{getSpeakerName(segment.speaker)}
 												</span>
 
 												<span class="text-xs text-gray-500">
